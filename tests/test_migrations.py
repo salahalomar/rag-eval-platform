@@ -101,4 +101,4 @@ def test_committed_migrations_are_discoverable() -> None:
     # Guards against a real migration file being named in a way the runner rejects.
     repo_root = Path(__file__).resolve().parents[1]
     migrations = discover(repo_root / "infra" / "migrations")
-    assert [m.label for m in migrations] == ["001_init"]
+    assert [m.label for m in migrations] == ["001_init", "002_core_schema"]
