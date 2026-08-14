@@ -30,12 +30,24 @@ class DatabaseHealth(BaseModel):
 
 @contextmanager
 def connect(dsn: str | None = None) -> Iterator[psycopg.Connection]:
-    """Open a connection, committing on clean exit and rolling back on failure.
+    """Open a connection in autocommit mode, so `conn.transaction()` means what it says.
 
-    Takes an explicit DSN so that tests and the eval runner can point at a scratch
-    database without mutating process-wide state; falls back to settings otherwise.
+    Autocommit is doing real work here, not being lazy. Without it, psycopg opens an
+    implicit transaction on the first statement -- typically an innocuous SELECT -- and
+    every later `with conn.transaction()` block degrades to a savepoint inside it,
+    committing nothing until the connection closes. A 150-paper ingest then becomes one
+    ten-minute transaction: a failure at paper 140 discards the other 139, and the
+    "re-running inserts zero rows" property silently stops holding after any interruption.
+
+    With autocommit on, each `with conn.transaction()` is a genuine BEGIN/COMMIT, which
+    is what both the ingest pipeline and the migration runner assume. Statements issued
+    outside such a block commit individually, so every write in this library belongs
+    inside one.
+
+    Takes an explicit DSN so tests and the eval runner can point at a scratch database
+    without mutating process-wide state.
     """
-    with psycopg.connect(dsn or get_settings().database_url) as conn:
+    with psycopg.connect(dsn or get_settings().database_url, autocommit=True) as conn:
         yield conn
 
 
