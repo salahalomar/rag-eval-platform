@@ -1,0 +1,25 @@
+# Secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Caches created by later phases
+data/pdfs/
+data/models/
+.cache/
+
+# Node (Phase 8)
+node_modules/
+dist/
+
+# OS
+.DS_Store
