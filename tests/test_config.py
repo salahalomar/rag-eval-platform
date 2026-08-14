@@ -11,6 +11,8 @@ def test_defaults_match_the_specification() -> None:
     assert c.embedding_model == "BAAI/bge-small-en-v1.5"
     assert c.chunk_tokens == 512
     assert c.chunk_overlap_pct == pytest.approx(0.15)
+    assert c.drop_references is True
+    assert c.drop_figure_only_pages is True
     assert c.contextual_headers is True
     assert c.dense_enabled is True
     assert c.dense_top_k == 50
