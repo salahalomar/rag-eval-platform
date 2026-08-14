@@ -1,0 +1,21 @@
+[project]
+name = "rag"
+version = "0.1.0"
+description = "Ingestion, retrieval and generation library. Importable from a script, a notebook, the API and the eval runner identically."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "psycopg[binary,pool]>=3.2",
+    "pydantic>=2.9",
+    "pydantic-settings>=2.6",
+]
+
+# NOTE: no FastAPI, no uvicorn, no starlette. ENGINEERING.md forbids packages/rag from
+# depending on apps/, and the cheapest way to keep that honest is to make the web
+# framework unavailable here at all. tests/test_layering.py asserts it.
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rag"]

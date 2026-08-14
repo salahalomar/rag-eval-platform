@@ -1,0 +1,99 @@
+[project]
+name = "rag-eval-platform"
+version = "0.1.0"
+description = "RAG over arXiv ML papers whose primary deliverable is the evaluation harness."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "rag",
+    "rag-api",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["packages/rag", "apps/api"]
+
+[tool.uv.sources]
+rag = { workspace = true }
+rag-api = { workspace = true }
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28",
+    "mypy>=1.13",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+]
+
+# ---------------------------------------------------------------------------
+# Lint / format
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["packages/rag/src", "apps/api/src", "eval", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "A",   # shadowed builtins
+    "B",   # bugbear
+    "C4",  # comprehensions
+    "D",   # pydocstyle -- ENGINEERING.md mandates docstrings on public library functions
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # import sorting
+    "N",   # pep8 naming
+    "PTH", # prefer pathlib
+    "RUF",
+    "SIM", # simplify
+    "UP",  # pyupgrade
+    "W",   # pycodestyle warnings
+]
+ignore = [
+    "D203", # incompatible with D211
+    "D213", # incompatible with D212
+]
+
+[tool.ruff.lint.per-file-ignores]
+# The docstring mandate in ENGINEERING.md is scoped to packages/rag, which is the code an
+# interviewer reads. Everything else is checked for correctness, not prose.
+"apps/**" = ["D"]
+"eval/**" = ["D"]
+"tests/**" = ["D"]
+
+[tool.ruff.lint.isort]
+# Workspace members are installed into the venv, so ruff would otherwise sort them as
+# third-party and the import blocks would disagree with what a reader expects.
+known-first-party = ["rag", "api", "eval"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+# ---------------------------------------------------------------------------
+# Types
+# ---------------------------------------------------------------------------
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["packages/rag/src", "apps/api/src", "tests"]
+mypy_path = ["packages/rag/src", "apps/api/src"]
+warn_unreachable = true
+enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
+
+[[tool.mypy.overrides]]
+# FastAPI's route decorators are untyped from mypy's perspective; strict mode would
+# otherwise reject every endpoint. packages/rag stays fully strict.
+module = "api.*"
+disallow_untyped_decorators = false
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers --strict-config"
+markers = [
+    "integration: requires a live Postgres (run `make dev` first)",
+]

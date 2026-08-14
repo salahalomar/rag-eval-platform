@@ -1,0 +1,20 @@
+[project]
+name = "rag-api"
+version = "0.1.0"
+description = "Thin HTTP layer over packages/rag. Contains no retrieval logic."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi>=0.115",
+    "rag",
+    "uvicorn[standard]>=0.32",
+]
+
+[tool.uv.sources]
+rag = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/api"]
