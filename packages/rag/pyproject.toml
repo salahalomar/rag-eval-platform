@@ -4,10 +4,22 @@ version = "0.1.0"
 description = "Ingestion, retrieval and generation library. Importable from a script, a notebook, the API and the eval runner identically."
 requires-python = ">=3.12,<3.13"
 dependencies = [
+    "httpx>=0.28",
+    "huggingface-hub>=0.26",
     "psycopg[binary,pool]>=3.2",
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
+    "pymupdf>=1.24",
+    "tokenizers>=0.20",
 ]
+
+# Exact versions are pinned by the committed uv.lock, which Docker and CI both install
+# with --frozen. This matters more than usual here: PyMuPDF's text extraction decides
+# where chunk boundaries fall, so an unpinned parser would silently re-chunk the corpus
+# and invalidate comparisons against previously committed eval results.
+
+[project.scripts]
+rag = "rag.cli:main"
 
 # NOTE: no FastAPI, no uvicorn, no starlette. ENGINEERING.md forbids packages/rag from
 # depending on apps/, and the cheapest way to keep that honest is to make the web

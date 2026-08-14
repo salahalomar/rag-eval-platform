@@ -63,6 +63,12 @@ ignore = [
 "eval/**" = ["D"]
 "tests/**" = ["D"]
 
+# The ambiguous-unicode rules catch homoglyph typos, which is worth having everywhere
+# except the two places whose subject matter is real mathematical notation lifted out of
+# real PDFs. Rejecting those characters is what the section detector is being tested on.
+"packages/rag/src/rag/ingest/sections.py" = ["RUF001", "RUF002", "RUF003"]
+"tests/test_sections.py" = ["RUF001", "RUF002", "RUF003"]
+
 [tool.ruff.lint.isort]
 # Workspace members are installed into the venv, so ruff would otherwise sort them as
 # third-party and the import blocks would disagree with what a reader expects.
