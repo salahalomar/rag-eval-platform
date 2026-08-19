@@ -11,12 +11,22 @@ dependencies = [
 [tool.uv]
 package = false
 
+# The default Linux torch wheel bundles CUDA and weighs roughly 2GB, which lands in the
+# API image and in every CI run for no benefit: everything here is CPU-only by design,
+# because a free-tier deployment has no GPU and the ablation must be reproducible on a
+# laptop. macOS wheels are already CPU-only, so the override is scoped to Linux.
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
 [tool.uv.workspace]
 members = ["packages/rag", "apps/api"]
 
 [tool.uv.sources]
 rag = { workspace = true }
 rag-api = { workspace = true }
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
 
 [dependency-groups]
 dev = [
@@ -94,6 +104,13 @@ enable_error_code = ["ignore-without-code", "redundant-expr", "truthy-bool"]
 module = "api.*"
 disallow_untyped_decorators = false
 
+[[tool.mypy.overrides]]
+# Third-party packages that ship no type information. Listed individually rather than
+# switching off the check globally, so a genuinely untyped import we add ourselves still
+# fails the build.
+module = ["tokenizers.*", "sentence_transformers.*", "pgvector.*"]
+ignore_missing_imports = true
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -102,4 +119,5 @@ testpaths = ["tests"]
 addopts = "-q --strict-markers --strict-config"
 markers = [
     "integration: requires a live Postgres (run `make dev` first)",
+    "model: downloads and runs real model weights (~130MB); deselect with -m 'not model'",
 ]
