@@ -110,9 +110,9 @@ def insert_chunks(
             INSERT INTO chunks (
                 paper_id, ordinal, section_path, content, embed_input, token_count,
                 page_start, page_end, char_start, char_end, content_sha256,
-                chunk_config, chunk_config_sha256
+                embed_input_sha256, chunk_config, chunk_config_sha256
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (paper_id, ordinal, content_sha256, chunk_config_sha256) DO NOTHING
             """,
             [
@@ -128,6 +128,7 @@ def insert_chunks(
                     chunk.char_start,
                     chunk.char_end,
                     chunk.content_sha256,
+                    chunk.embed_input_sha256,
                     chunk_config,
                     chunk_config_sha256,
                 )

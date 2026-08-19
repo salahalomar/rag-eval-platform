@@ -79,6 +79,9 @@ class Chunk:
     char_start: int
     char_end: int
     content_sha256: str
+    # Digest of embed_input, not of content. These differ whenever contextual headers are
+    # on, and the embedding cache must key on what the model actually saw.
+    embed_input_sha256: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +247,7 @@ def chunk_document(
                 char_start=char_start,
                 char_end=char_end,
                 content_sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+                embed_input_sha256=hashlib.sha256(embed_input.encode("utf-8")).hexdigest(),
             )
         )
 
