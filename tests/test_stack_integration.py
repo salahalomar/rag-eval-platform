@@ -96,7 +96,10 @@ def test_a_transaction_block_commits_before_the_connection_closes() -> None:
 
 def test_core_schema_tables_exist(conn: psycopg.Connection) -> None:
     migrate(conn, MIGRATIONS_DIR)
-    for table in ("papers", "chunks", "embeddings", "query_logs"):
+    # `embeddings` became `embeddings_384` in migration 003, alongside `embeddings_768`:
+    # pgvector fixes dimensionality per column, so a second embedding model needs its own
+    # table rather than a nullable second column.
+    for table in ("papers", "chunks", "embeddings_384", "embeddings_768", "query_logs"):
         assert conn.execute("SELECT to_regclass(%s)", (table,)).fetchone() != (None,)
 
 
