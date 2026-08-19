@@ -7,7 +7,7 @@ asymmetry is baked into `Encoder`, not reimplemented here, so the search path an
 indexing path cannot drift apart.
 
 **Ties break on `chunk_id`.** Two chunks at identical distance would otherwise come back
-in whatever order the scan happened to produce, and CLAUDE.md requires two runs of
+in whatever order the scan happened to produce, and ENGINEERING.md requires two runs of
 `make eval` on one commit to produce identical metrics. Unordered ties are the classic
 way that quietly stops being true.
 """
