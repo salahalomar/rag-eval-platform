@@ -58,5 +58,9 @@ jobs:
       - name: Migrate
         run: make migrate
 
+      # Deselects the handful of tests that download real model weights. Everything
+      # about retrieval behaviour is covered by a deterministic fake encoder, so the
+      # gate stays fast and needs no network. Phase 7's eval job caches the weights and
+      # runs the full set.
       - name: Test
-        run: make test
+        run: make test-nomodel
