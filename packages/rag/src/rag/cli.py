@@ -11,9 +11,14 @@ from pathlib import Path
 
 from rag.config import RetrievalConfig
 from rag.db import connect
+from rag.index.benchmark import DEFAULT_EF_SEARCH_SWEEP, benchmark_index
+from rag.index.embed import DEFAULT_BATCH_SIZE, embed_corpus, table_for
 from rag.ingest import store
+from rag.ingest.arxiv import read_manifest
 from rag.ingest.pipeline import DEFAULT_CATEGORIES, DEFAULT_PDF_CACHE, ingest
+from rag.retrieve import dense
 from rag.settings import get_settings
+from rag.telemetry import StageTimer
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -33,7 +38,13 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
         chunk_overlap_pct=args.chunk_overlap_pct,
     )
 
-    print(f"ingesting up to {args.limit} papers from {', '.join(categories)}")
+    ids = read_manifest(args.ids_file) if args.ids_file else None
+    if ids is not None:
+        print(f"ingesting {len(ids)} papers pinned by {args.ids_file}")
+    else:
+        print(f"ingesting up to {args.limit} papers from {', '.join(categories)}")
+        print("  (unpinned: 'most recent N' is a different set of papers every day —")
+        print("   use --ids-file once the corpus is fixed)")
     print(f"chunking identity: {config.chunking_sha256()[:12]}  {config.chunking_params()}")
 
     with connect() as conn:
@@ -43,6 +54,7 @@ def _cmd_ingest(args: argparse.Namespace) -> int:
             limit=args.limit,
             config=config,
             cache_dir=args.cache_dir,
+            ids=ids,
         )
 
     print("\ningest report:")
@@ -95,6 +107,94 @@ def _cmd_stats(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_manifest(args: argparse.Namespace) -> int:
+    with connect() as conn:
+        rows = conn.execute(
+            "SELECT id, title FROM papers ORDER BY published_at DESC, id DESC"
+        ).fetchall()
+    if not rows:
+        print("no papers ingested; nothing to pin")
+        return 1
+
+    lines = [
+        "# Frozen corpus for rag-eval-platform.",
+        "#",
+        "# Rebuild with: rag ingest --ids-file <this file>",
+        "#",
+        "# Pinned because a category search returns 'the most recent N', which is a",
+        "# different set of papers every day. The golden set binds questions to chunk",
+        "# ids, so the corpus behind those ids has to be nameable, not merely",
+        "# describable.",
+        f"# {len(rows)} papers.",
+        "",
+    ]
+    lines.extend(f"{paper_id}  # {str(title)[:90]}" for paper_id, title in rows)
+    args.path.parent.mkdir(parents=True, exist_ok=True)
+    args.path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    print(f"wrote {len(rows)} paper ids to {args.path}")
+    return 0
+
+
+def _cmd_embed(args: argparse.Namespace) -> int:
+    config = RetrievalConfig(embedding_model=args.model)
+    print(f"embedding with {config.embedding_model} into {table_for(config.embedding_model)}")
+    with connect() as conn:
+        report = embed_corpus(
+            conn,
+            model=config.embedding_model,
+            chunk_config_sha256=None if args.all_chunkings else config.chunking_sha256(),
+            batch_size=args.batch_size,
+        )
+    print("\nembed report:")
+    for line in report.as_lines():
+        print(line)
+    return 0
+
+
+def _cmd_search(args: argparse.Namespace) -> int:
+    config = RetrievalConfig(embedding_model=args.model, hnsw_ef_search=args.ef_search)
+    timer = StageTimer()
+    with connect() as conn:
+        results = dense.search(conn, args.query, config, timer=timer, top_k=args.top_k)
+
+    print(f'query: "{args.query}"')
+    print(f"model: {config.embedding_model}   ef_search: {config.hnsw_ef_search}")
+    print(f"timings: {timer.as_dict(1)}")
+    if not results:
+        print("\nno results — has `rag embed` been run for this model and chunking?")
+        return 1
+
+    for candidate in results:
+        print()
+        print(
+            f"  {candidate.rank:>2}. score {candidate.score:.4f}  "
+            f"chunk {candidate.chunk_id}  [{candidate.paper_id}]  "
+            f"pages {candidate.page_start}-{candidate.page_end}"
+        )
+        print(f"      paper:   {candidate.paper_title[:86]}")
+        print(f"      section: {candidate.section_path[:86]}")
+        body = " ".join(candidate.content.split())
+        print(f"      text:    {body[:260]}{'...' if len(body) > 260 else ''}")
+    return 0
+
+
+def _cmd_bench_index(args: argparse.Namespace) -> int:
+    config = RetrievalConfig(embedding_model=args.model)
+    print(f"benchmarking {table_for(config.embedding_model)} over {args.queries} sampled queries")
+    print("(exact ground truth is a full scan per query — this takes a minute)\n")
+    with connect() as conn:
+        result = benchmark_index(
+            conn,
+            config,
+            query_count=args.queries,
+            ef_search_values=tuple(args.ef_search),
+            rebuild=args.rebuild,
+        )
+    for line in result.as_lines():
+        print(line)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     """Parse arguments and dispatch to a subcommand."""
     parser = argparse.ArgumentParser(prog="rag", description="rag-eval-platform tooling")
@@ -111,13 +211,58 @@ def main(argv: list[str] | None = None) -> int:
         "--chunk-overlap-pct", type=float, default=RetrievalConfig().chunk_overlap_pct
     )
     ingest_parser.add_argument("--cache-dir", type=Path, default=DEFAULT_PDF_CACHE)
+    ingest_parser.add_argument(
+        "--ids-file",
+        type=Path,
+        help="ingest exactly these arXiv ids (one per line) instead of a category search",
+    )
     ingest_parser.set_defaults(func=_cmd_ingest)
+
+    manifest_parser = subparsers.add_parser(
+        "manifest", help="write the ingested corpus out as a pinned id list"
+    )
+    manifest_parser.add_argument("path", type=Path)
+    manifest_parser.set_defaults(func=_cmd_manifest)
 
     stats_parser = subparsers.add_parser("stats", help="summarise what is in the corpus")
     stats_parser.add_argument(
         "--sample", type=int, default=0, help="also print N random chunks (seeded, reproducible)"
     )
     stats_parser.set_defaults(func=_cmd_stats)
+
+    default_model = RetrievalConfig().embedding_model
+
+    embed_parser = subparsers.add_parser("embed", help="embed chunks that lack a vector")
+    embed_parser.add_argument("--model", default=default_model)
+    embed_parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    embed_parser.add_argument(
+        "--all-chunkings",
+        action="store_true",
+        help="embed every stored chunking, not just the one the default config describes",
+    )
+    embed_parser.set_defaults(func=_cmd_embed)
+
+    search_parser = subparsers.add_parser("search", help="dense search over the corpus")
+    search_parser.add_argument("query")
+    search_parser.add_argument("--top-k", type=int, default=10)
+    search_parser.add_argument("--model", default=default_model)
+    search_parser.add_argument("--ef-search", type=int, default=RetrievalConfig().hnsw_ef_search)
+    search_parser.set_defaults(func=_cmd_search)
+
+    bench_parser = subparsers.add_parser(
+        "bench-index", help="measure HNSW recall and latency against an exact scan"
+    )
+    bench_parser.add_argument("--model", default=default_model)
+    bench_parser.add_argument("--queries", type=int, default=50)
+    bench_parser.add_argument(
+        "--ef-search", type=int, nargs="+", default=list(DEFAULT_EF_SEARCH_SWEEP)
+    )
+    bench_parser.add_argument(
+        "--rebuild",
+        action="store_true",
+        help="drop and rebuild the index first, to measure build time on a populated table",
+    )
+    bench_parser.set_defaults(func=_cmd_bench_index)
 
     args = parser.parse_args(argv)
     _configure_logging(args.verbose)

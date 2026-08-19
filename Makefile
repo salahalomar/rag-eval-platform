@@ -54,4 +54,7 @@ typecheck: ## mypy --strict over packages/rag (and apps/api)
 test: ## Run the test suite (integration tests need `make dev` first)
 	$(UV) run pytest
 
+test-nomodel: ## Tests needing no model weights — what CI runs on every push
+	$(UV) run pytest -m "not model"
+
 check: lint typecheck test ## Everything CI runs
