@@ -1,0 +1,160 @@
+# Frozen corpus for rag-eval-platform.
+#
+# Rebuild with: rag ingest --ids-file <this file>
+#
+# Pinned because a category search returns 'the most recent N', which is a
+# different set of papers every day. The golden set binds questions to chunk
+# ids, so the corpus behind those ids has to be nameable, not merely
+# describable.
+# 150 papers.
+
+2608.18072v1  # Multi-Agent AI System for Radiology Report Structuring and Quality Assurance with Independ
+2608.18066v1  # On the Fragility of Self-Improving Agents: Variance, Task Order, and Underspecification
+2608.18062v1  # TokEval: A Tokenizer Evaluation Suite
+2608.18061v1  # The concentration game: Bayesian updating, regret, and information
+2608.18055v1  # Primitive Representation Learning for Unsupervised Dynamic Contrast Enhanced MRI Reconstru
+2608.18041v1  # Language Has Two Parameters: Narrative-Induced Semantic Plasticity and Phase-Sensitive Int
+2608.18040v1  # Optimize Your Sampling: Tuned Diffusion Sampling with Bayesian Optimization
+2608.18036v1  # Harnessing Magnitude-Only and Complex Measurements for Improved Dynamic MRI Reconstruction
+2608.18033v1  # Where A Small Language Model Helps in Invoice Categorisation, Understood Through Embedding
+2608.18027v1  # Chain-of-Experience for Continual LLM Improvement
+2608.18026v1  # TabNSM: Neural Sparse Mixer for Tabular Regression
+2608.18025v1  # Why GPT-Style Models Do Not Directly Transfer to Symbolic Music: Compression in the Wrong 
+2608.18021v1  # Revisiting WEASEL 2.0: Reproduction, Sensitivity, and an Adaptive Ensemble-Size Rule
+2608.18011v1  # The IOL-AI Challenge: An Open Challenge towards Advancing Linguistic Reasoning
+2608.18008v1  # Policy-Invariant Reward Shaping from LLM Feedback: A Framework for Hybrid RL Agents
+2608.18004v1  # Composing Flow-Matching Energies with Known Physics: Generation, OOD Detection, and Invers
+2608.17994v1  # Judge, Retrieve, or Abstain: Uncertainty-Guarded LLM Judging with Provable Risk Guarantees
+2608.17987v1  # Against Political Polarization: A Unified Framework for Tracing Evolving Political Ideolog
+2608.17981v1  # Recirculation
+2608.17979v1  # When Writing Style Drifts: Benchmarking Authorship Verification under Distribution Shifts 
+2608.17971v1  # Evaluating and improving crop-yield forecasting methods during extreme drought
+2608.17965v1  # Too Sure to Be Safe: Model Calibration for Reliable Log Anomaly Detection
+2608.17959v1  # Towards Zero-Shot Task Transfer with Neurosymbolic World Models
+2608.17957v1  # Understanding the Surprising Generalization Properties of Tabular Foundation Models
+2608.17956v1  # An Omitted Mode Is a Rare Rule: The Sampling-Verification Danger Law in Continuous Code Wo
+2608.17950v1  # Do Large Language Models Play Six Degrees of Separation? Measuring Topological Compression
+2608.17948v1  # SIGMA: SHAP-Guided Implicit-Trajectory Generation for Metadata-Free LLM-Based AutoFE
+2608.17947v1  # Procedural Content Metageneration via Program Search and Continual Abstraction Discovery
+2608.17941v1  # Efficient RLVR Scheduling via Graph-Structured Online Difficulty Estimation
+2608.17938v1  # Grading Needs a Rubric, Not Intelligence
+2608.17931v1  # SpeechSense: A Paralinguistic-Focused Dataset for Fine-Grained Speech Sentiment Analysis
+2608.17923v1  # AppendiGrade: An XAI-Enhanced Deep Learning Framework for Grading Appendicitis in Ultrasou
+2608.17914v1  # Hybrid ML for Lightweight Pre-Route Delay Estimation in Open-Source IC Design
+2608.17911v1  # CABLE: Extending the Reach of Memory Retrieval via Complementary Antecedent-Based Linking 
+2608.17896v1  # Dynamic Compression in Recurrent Networks
+2608.17895v1  # BEAR-Bench: A Bilingual Enterprise and Academic Reasoning Benchmark for Multimodal Models
+2608.17894v1  # A Residual Learning Approach for Unsteady Aerodynamic Load Prediction
+2608.17866v1  # BayesPrompt: human readable prompts that make sense
+2608.17849v1  # Efficient Resource Optimization for Split Federated Learning
+2608.17848v1  # MoRAX: Mobility-based Representation Augmentation for Geospatial Foundation Models
+2608.17843v1  # Encoded but Not Actionable: Auditing the Decode-Generate-Steer Gap in Frozen LLMs for Geom
+2608.17841v1  # Toward the Optimal Regret-Instability Trade-off in Multi-Armed Bandits
+2608.17836v1  # Leveraging Association Context Retrieval in Knowledge Edit- ing to Build White-Box Attacks
+2608.17827v1  # From Global Benchmarks to Local Evaluations: Benchmarking LLMs for the German Public Secto
+2608.17823v1  # MotoSafety: Edge-AI with Learned Temporal Importance for Two-Wheeler Collision Risk Assess
+2608.17822v1  # Spatially explicit feature importance for building height estimation using research-access
+2608.17810v1  # Interpretable Humans, Alien LLMs: Expert Analysis of Latent Structures in Assessment Respo
+2608.17809v1  # Whether LLMs Can Navigate Beliefs and Facts Depends on How You Phrase It
+2608.17804v1  # An Empirical Study of Reward Specification and Benchmark Reliability in GRPO-based LLM Unl
+2608.17802v1  # Fourth-Moment Geometry of Rademacher Sums
+2608.17796v1  # Diff-DDoS: Realistic Cyber-Physical Attack Synthesis and Robust Detection for 5G-Enabled C
+2608.17795v1  # TraceSQL: Traceable Answerability Estimation for Reference-Free Text-to-SQL Verification
+2608.17781v1  # Preference Is Not Intervention: The Structure and Stability Boundaries of Reader-Specific 
+2608.17776v1  # Debate Training Reduces Reward Hacking in RLAIF
+2608.17775v1  # Training-Free Human-in-the-Loop Anomaly Detection via Memory Bank Correction
+2608.17753v1  # MAGPIE-Net: Predicting short-duration heavy-rainfall events in station neighborhoods from 
+2608.17744v1  # Thinking in a Low-Resource Language: What SFT Builds, What RL Fixes, What Accuracy Cannot 
+2608.17722v1  # MemCatalyst: Amplifying Data Auditing on Vision-Language Models via Data Poisoning
+2608.17719v1  # What Aggregate Scores Miss: Measuring Item-Level Regressions in Commercial LLM API Migrati
+2608.17713v1  # Cross-View Correspondence Is a Measurement Intervention: Two-Sided Validation for Agent Ev
+2608.17687v1  # Mixture-of-Expert Blocks Contain Strong Hallucination Detection Signals
+2608.17678v1  # Conformal Prediction for Molecular Properties under Label Shift
+2608.17666v1  # Picard Proximal Monte Carlo for Parallel Bayesian Imaging with Score-Based Generative Prio
+2608.17646v1  # Elimination Geometry
+2608.17644v1  # LLM-Derived Preference Judgments Are Not Self-Consistent
+2608.17641v1  # rl-triton: High-Performance Triton GPU Kernels for Reinforcement Learning Credit Assignmen
+2608.17628v1  # Iterative Grasp Pose Refinement: A Deep Reinforcement Learning Approach for 2D Vision
+2608.17620v1  # OOD Detection for EEG-based Machine Learning in High-Risk Environments
+2608.17616v1  # MoNe: Modular Neural Memory for Efficient Long Context Inference
+2608.17605v1  # Multi-turn Conversational AI from Text to Multimodal Interaction: Data, Models, Evaluation
+2608.17592v1  # Communication Reduction via Semantic-Based Encoding in DMPC Using LSTMs
+2608.17587v1  # Write, Execute, Refine: From Skill Followers to Skill Optimizers via Reinforcement Learnin
+2608.17583v1  # Auditing Exposure to Harmful Content on TikTok using Multimodal Language Models: A Cross-N
+2608.17573v1  # Feature Priming in Online Linear Regression: Sparse-Regret Lower Bounds and a Tight Univar
+2608.17567v1  # Domain-Adapted Molecular Language Models for Efficient Search of Make-on-Demand Libraries
+2608.17561v1  # Leveraging existing sparse point annotations for benthic imagery dense segmentation
+2608.17556v1  # Reflex-Guard: A Low-Latency Guardrail for LLM Prompt Safety Using Dense Semantic Embedding
+2608.17550v1  # Code as Representation: A Compilable Parsing Paradigm for Academic Documents
+2608.17542v1  # No Gaussian Required: Contrastive Inverse Dynamics for JEPA World Models
+2608.17536v1  # CoAL-RAG: A Complexity-Aware Legal Retrieval-Augmented Generation Method
+2608.17534v1  # ArborMem: Navigating Interaction States with Memory Forests
+2608.17530v1  # When to Review: Spaced Repetition for Continual Pre-Training of Language Models
+2608.17524v1  # Evaluating RL Explainability Methods by How Much They Help Fix Bugs in Agents
+2608.17519v1  # Looking Beyond the Scale: Do Surgical Skill Models Learn Transferable Representations Acro
+2608.17516v1  # Effects of Answer Format Variation on Gender Bias in Large Language Models
+2608.17501v1  # SGHA: Evidence-Grounded Research Problem Discovery with Local Language Models
+2608.17471v1  # When AI Designs AI: Innovation or Imitation?
+2608.17466v1  # Online Generalized Sparse Regression: How Does Overparametrization Help?
+2608.17454v1  # From Entity Mentions to Tone: An LLM-Based Pipeline for Media Bias Analysis
+2608.17452v1  # Causal Local States: Scalable Simultaneous Causal Network Inference and Forecasting for Dy
+2608.17450v1  # Nonlocal Transition Kernel for Efficient Learning of Restricted Boltzmann Machines
+2608.17445v1  # Decomposition Attacks Across Unlinkable Identities: Limits of Stateful Defenses for LLM Se
+2608.17440v1  # General Semantic Knowledge Infusion for Spatio-Temporal Traffic Forecasting
+2608.17423v1  # Prism-GRPO: Faster VLA Policy Optimization via Splitting Same-outcome Groups
+2608.17411v1  # GUPO: Gradient Uncertainty-aware Policy Optimization for Post-Training Large Language Mode
+2608.17399v1  # An Investigation of Translationese in the Generations of Multilingual Large Language Model
+2608.17381v1  # Leveraging generative hallucination and biophysics-informed modeling for unified biomolecu
+2608.17379v1  # PTXBench: Benchmark and Adapt LLMs for GPU Kernel Optimization with Architecture-specific 
+2608.17374v1  # On the Pseudo-Mixing of Kac's Walk
+2608.17373v1  # Integrating Novelty and Surprise for Experience Prioritization and Exploration in Image-Ba
+2608.17370v1  # Pathology Transport: Optimal-Transport Explanations for Clinical Data, and When Their Heat
+2608.17366v1  # CORAM: Coherent Orthogonal Rotation for Model Merging
+2608.17356v1  # ArguLens: An Open-Source System for Automated Essay Scoring and Label-Aware Feedback Gener
+2608.17347v1  # Repetition as Reinforcement: Enhancing Sample Efficiency via Instant Episode Repetition in
+2608.17343v1  # Tight Bounds for Data-driven Multiple Hyper-parameter Tuning with Structured Loss Function
+2608.17342v1  # MoFE: A Novel Mixture-of-Experts Framework with Fourier Neural Operators for Cryptocurrenc
+2608.17333v1  # SPACE: Sample-cloud Predictive Adaptive Conformal Ellipsoids for Multivariate Time-Series 
+2608.17330v1  # LLMs for Medical Consultation Are Evaluated Too Late: The Preformulation Gap
+2608.17325v1  # What Tokens are Learned when Tokenization is Optimized Jointly with Language Modeling?
+2608.17310v1  # Agentic ESOpt: Fine-Tuning Long-Horizon LLM Agents with Minimal GPU Requirements
+2608.17293v1  # Beyond MSE: Rethinking the Evaluation Metric and Benchmarking for Irregular Time Series Fo
+2608.17288v1  # Q-Interference: Memory-Efficient Phase-Aware Quantum-Inspired Attention
+2608.17286v1  # Abra: Scaling Diffusion Image Training
+2608.17284v1  # Rethinking Irregular Time Series Forecasting from the Perspective of Basis Functions
+2608.17268v1  # Understanding Curriculum Learning in Large Language Models via Cross-Difficulty Optimizati
+2608.17253v1  # Co-RL: Unsupervised Reasoning Emerges from Diverse Cohort in Multi-agent RL
+2608.17250v1  # Adaptive surrogate modeling for high-dimensional spatio-temporal output
+2608.17248v1  # Information fusion and machine learning for sensitivity analysis using physics knowledge a
+2608.17246v1  # Physics-Informed and Hybrid Machine Learning in Additive Manufacturing: Application to Fus
+2608.17231v1  # Delta2Gamma: Band-Wise Adaptive Contrastive Learning of EEG for Alzheimer's Disease Detect
+2608.17223v1  # Temporal Leakage in Financial News NLP: A Multi-Architecture Audit with a Regime-Specific 
+2608.17218v1  # The Plot Thins: Uniformity and Linearity in Literary Summaries
+2608.17213v1  # Pessimistic Meta-Induction and Its Limits: Lessons from Frequentist Statistics and Machine
+2608.17209v1  # Teach and Grow: An Agent-Centered Architecture for General Robot Learning
+2608.17205v1  # Which Source Wins? Task-Dependent Reliance in Vision-Language Models
+2608.17203v1  # Expressivity In Multimodal Contrastive Learning
+2608.17190v1  # How smoothing the affinity matrix affects neighborhood preservation in t-SNE
+2608.17188v1  # Token Optimization and Context Window Management in Multi-Agent AI Workflows
+2608.17184v1  # AISA: AI Safety Assistant Framework for Continuous Improvement of Highway Construction
+2608.17181v1  # Reinforcement Learning as (Discrete) Potential Theory
+2608.17180v1  # Task Specialization Fine-Tuning for Contextual Reinforcement Learning
+2608.17174v1  # Population Health-Based Machine Learning Reveals Associations Between Psychosocial Factors
+2608.17173v1  # Policy Optimization and Statistical Inference for Online Contextual Matrix Games
+2608.17171v1  # Polaris: Learning to Generate Table Descriptions from Retrieval Feedback
+2608.17168v1  # Can LLMs Reason in a Legally Meaningful Manner? A Small-scale Study on European Court of H
+2608.17164v1  # SCENARIODIFF: A Scenario-level Guidance Framework for Multimodal Time Series Forecasting--
+2608.17163v1  # Q-Learning With World Models
+2608.17162v1  # OraclePhys: A Systematic Framework for LLM Fine-Tuning on Structural Mechanics
+2608.17153v1  # Towards Safer RAG: Only Agents Capable of System 2 Thinking may Access Untrusted Documents
+2608.17151v1  # Lymphocyte Mimicry Correction via Region-Level Tissue Reasoning and Unbalanced Optimal Tra
+2608.17150v1  # KnowSim: Evaluating Information Calibration in LLM Assistants with User Simulators that Le
+2608.17147v1  # Picture the Epsilon: Pursuing Identity-Level Privacy Guarantees for Images
+2608.17135v1  # Iterative tensor network transformations for element-wise evaluation of elementary and fil
+2608.17132v1  # Causal Discovery in Equal Variance Linear Gaussian DAGs via SURE-Tuned Ridge Regression
+2608.17120v1  # Children, but not language models, show accelerating returns in word learning
+2608.17103v1  # From Abductive Explanations to Global Logical Rules for Node Classification in SGCs
+2608.17102v1  # Emotion Across Speech and Faces: Shared Affective Mechanisms in Multimodal Foundation Mode
+2608.17096v1  # A Glyph Is Not a Letter, a Token Is Not a Word, a Space Is Not a Space: What the Units of 
+2608.17093v1  # Digital Twin-Based Intrusion Detection for Vehicle Powertrain CAN Bus Systems
+2608.17091v1  # Deep Learning for Cross-Border Electricity Price Forecasting: A Comparative Study

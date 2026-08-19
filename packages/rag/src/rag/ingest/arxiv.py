@@ -198,6 +198,72 @@ def search(
     return papers
 
 
+def fetch_by_ids(
+    ids: Sequence[str],
+    *,
+    client: httpx.Client | None = None,
+    limiter: _RateLimiter | None = None,
+) -> list[PaperMetadata]:
+    """Fetch metadata for an explicit list of arXiv identifiers.
+
+    This is what makes the corpus reproducible. `search()` returns "the most recent N in
+    these categories", which is a different set of papers every day -- fine for building
+    a corpus the first time, useless for rebuilding the one a golden set was written
+    against. Phase 6 pins chunk ids to questions, so the corpus behind them has to be
+    nameable rather than merely describable.
+
+    Results are returned in the order requested, so a rebuild yields the same corpus in
+    the same order.
+    """
+    limiter = limiter or _RateLimiter(MIN_REQUEST_INTERVAL_S)
+    owns_client = client is None
+    client = client or httpx.Client(headers={"User-Agent": USER_AGENT}, timeout=60.0)
+
+    found: dict[str, PaperMetadata] = {}
+    try:
+        for start in range(0, len(ids), PAGE_SIZE):
+            batch = list(ids[start : start + PAGE_SIZE])
+            response = _get(
+                client,
+                limiter,
+                API_URL,
+                params={"id_list": ",".join(batch), "max_results": len(batch)},
+            )
+            for entry in ET.fromstring(response.text).findall(f"{ATOM}entry"):
+                metadata = _entry_to_metadata(entry)
+                if metadata is not None:
+                    found[metadata.id] = metadata
+                    # arXiv resolves an unversioned id to its latest version, so record
+                    # the bare id too rather than silently dropping the paper.
+                    found.setdefault(metadata.id.split("v")[0], metadata)
+    finally:
+        if owns_client:
+            client.close()
+
+    missing = [paper_id for paper_id in ids if paper_id not in found]
+    if missing:
+        logger.warning("arXiv returned nothing for %d requested ids: %s", len(missing), missing[:5])
+
+    ordered: list[PaperMetadata] = []
+    seen: set[str] = set()
+    for paper_id in ids:
+        metadata = found.get(paper_id)
+        if metadata is not None and metadata.id not in seen:
+            seen.add(metadata.id)
+            ordered.append(metadata)
+    return ordered
+
+
+def read_manifest(path: Path) -> list[str]:
+    """Read a corpus manifest: one arXiv id per line, `#` comments ignored."""
+    ids = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.split("#", 1)[0].strip()
+        if stripped:
+            ids.append(stripped)
+    return ids
+
+
 def fetch_pdf(
     metadata: PaperMetadata,
     cache_dir: Path,
@@ -249,8 +315,13 @@ def fetch_corpus(
     categories: Sequence[str],
     limit: int,
     cache_dir: Path,
+    ids: Sequence[str] | None = None,
 ) -> Iterator[tuple[PaperMetadata, Path]]:
     """Yield each paper's metadata alongside its PDF on disk.
+
+    When `ids` is given the corpus is exactly those papers; otherwise it is the most
+    recent `limit` in `categories`, which is a moving target and only appropriate for
+    building a corpus in the first place.
 
     A generator so that a failure on paper 140 does not discard the work done on the
     first 139 -- the pipeline persists as it goes.
@@ -259,7 +330,12 @@ def fetch_corpus(
     with httpx.Client(
         headers={"User-Agent": USER_AGENT}, timeout=120.0, follow_redirects=True
     ) as client:
-        for metadata in search(categories, limit, client=client, limiter=limiter):
+        papers = (
+            fetch_by_ids(ids, client=client, limiter=limiter)
+            if ids is not None
+            else search(categories, limit, client=client, limiter=limiter)
+        )
+        for metadata in papers:
             try:
                 yield metadata, fetch_pdf(metadata, cache_dir, client=client, limiter=limiter)
             except ArxivError:

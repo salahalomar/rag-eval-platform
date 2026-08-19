@@ -107,8 +107,9 @@ def ingest(
     limit: int = 150,
     config: RetrievalConfig | None = None,
     cache_dir: Path = DEFAULT_PDF_CACHE,
+    ids: Sequence[str] | None = None,
 ) -> IngestReport:
-    """Ingest the most recent `limit` papers from `categories`.
+    """Ingest an explicit list of papers, or the most recent `limit` from `categories`.
 
     A failure on one paper is logged and counted, never fatal: a corpus build that dies
     on a single malformed PDF after eight minutes of rate-limited downloading is a bad
@@ -118,7 +119,7 @@ def ingest(
     counter = token_counter_for(config.embedding_model)
     report = IngestReport()
 
-    for metadata, pdf_path in arxiv.fetch_corpus(categories, limit, cache_dir):
+    for metadata, pdf_path in arxiv.fetch_corpus(categories, limit, cache_dir, ids):
         report.papers_seen += 1
         try:
             ingest_paper(conn, metadata, pdf_path, config, counter, report)
