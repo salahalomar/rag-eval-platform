@@ -34,6 +34,29 @@ class RetrievalConfig(BaseModel, frozen=True):
     contextual_headers: bool = True  # prepend paper+section title to chunk before embedding
     dense_enabled: bool = True
     dense_top_k: int = 50
+    # HNSW's per-query search breadth. Not in the original specification, but it changes
+    # which chunks come back -- it trades approximate-search recall against latency --
+    # and nothing that changes retrieval output may live outside this model, or the
+    # result it produced cannot be reconstructed from its record.
+    #
+    # 400 is measured, not guessed. Against exact-scan ground truth over 50 queries on
+    # the 6,386-chunk corpus (`rag bench-index`):
+    #
+    #     ef_search   recall@10   recall@50   p50 ms   p95 ms
+    #            40       0.830       0.860      6.9     11.6
+    #           100       0.952       0.921      5.1      8.2
+    #           200       0.980       0.973      6.7     12.4
+    #           400       1.000       1.000      7.1      8.2
+    #           800       1.000       1.000      7.4      8.0
+    #
+    # Chosen because approximation error here is indistinguishable from retrieval error
+    # in the published metrics: at ef_search=100 roughly one true neighbour in twenty is
+    # missed, and every ablation arm would carry that deficit while appearing to be a
+    # property of the retrieval method. 400 removes it for 2ms.
+    #
+    # This value is tuned to a corpus of this size and must be re-measured if the corpus
+    # grows; 400 will not stay exact at ten times the rows.
+    hnsw_ef_search: int = 400
     lexical_enabled: bool = True
     lexical_top_k: int = 50
     fusion: Literal["rrf", "dense_only", "lexical_only"] = "rrf"
