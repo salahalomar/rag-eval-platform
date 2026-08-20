@@ -5,9 +5,9 @@ harness is the deliverable** and the chat interface is only what makes it demoab
 repository measures its own retrieval and answer quality on every commit and publishes
 an ablation table — including the arms that lost.
 
-**Status: Phase 2 — dense retrieval.** Local bge-small embeddings with a content-addressed
-cache, an HNSW index measured against exact-scan ground truth, and cosine top-k search.
-Lexical search, fusion and reranking are next.
+**Status: Phase 3 — hybrid retrieval.** Dense (bge-small over HNSW) and lexical
+(`ts_rank_cd`) arms behind one `retrieve()` entry point, fused with Reciprocal Rank
+Fusion. Cross-encoder reranking is next.
 
 ---
 
@@ -38,8 +38,11 @@ uv run rag embed
 ```
 
 ```bash
-uv run rag search "What is the effect of learning rate warmup on transformer training?"
+uv run rag search "What is the effect of learning rate warmup on transformer training?" --compare
 ```
+
+`--compare` runs all three retrieval modes over the same query side by side. Any one of
+them is reachable on its own with `--mode {rrf,dense_only,lexical_only}`.
 
 The corpus is pinned in [`infra/corpus/`](infra/corpus/) — rebuild the exact same one with
 `rag ingest --ids-file infra/corpus/cs-lg-cs-cl-150.txt`. A category search returns "the
@@ -104,6 +107,43 @@ Retrieval quality itself is not claimed here. There is no golden set yet, so the
 Recall@k against ground truth — only Phase 6 and 7 can supply that, and until they do the
 right number of quality claims to make is zero.
 
+## Lexical retrieval and fusion
+
+**The lexical arm is `ts_rank_cd`, and it is not BM25.** `ts_rank_cd` is a
+coverage-density ranking: it scores by how many query lexemes a chunk contains and how
+tightly they cluster, with no document-frequency term and no length-saturation curve.
+That is a different function from Okapi BM25, not an implementation of it. Phase 6 adds a
+real BM25 arm with `bm25s` and the ablation table reports both.
+
+Query lexemes are OR-ed, not conjoined. `plainto_tsquery` would require all six content
+words of a typical question inside one 512-token chunk, which returns nothing on this
+corpus; lexical search is here as the recall complement to an arm that already handles
+semantic similarity.
+
+Measured over 8 questions on the 6,386-chunk corpus, warm:
+
+| mode | p50 ms | p95 ms |
+|---|---:|---:|
+| `dense_only` | 13.6 | 16.0 |
+| `lexical_only` | 17.2 | 51.3 |
+| `rrf` | 32.1 | 66.2 |
+
+**The arms overlap on a mean of 11.4 of their top 50** (min 6, max 21) — so roughly
+three-quarters of each list is unique to that arm. That is the measured case for fusing
+them at all. It is *not* a quality claim: complementarity is necessary for fusion to help,
+not sufficient, and whether it actually helps is a Recall@k question that only Phase 7 can
+answer.
+
+**Why lexical costs more than dense, and what it implies.** The OR query matches a mean of
+43% of the corpus (min 21%, max 72%), because stemmed terms like `train`, `rate` and
+`learn` appear nearly everywhere. The GIN index finds those matches in 0.4ms; the expense
+is computing `ts_rank_cd` for all ~3,500 of them and then top-N sorting. Suppressing
+common terms is precisely what an inverse-document-frequency weight does — which makes
+this a *measured* reason to want the BM25 arm in Phase 6 rather than a theoretical one.
+
+RRF's p50 is close to the sum of the two arms because they run sequentially. Running them
+concurrently is a Phase 9 concern, not a correctness one.
+
 ## Layout
 
 | Path | What lives here |
@@ -114,7 +154,9 @@ right number of quality claims to make is zero.
 | `eval/` | Golden set, metrics, runner, ablation matrix. *(Phases 6–7)* |
 
 The rule that matters: the evaluation harness calls the same `rag` code path the API
-calls. `tests/test_layering.py` enforces the direction of that dependency.
+calls. `tests/test_layering.py` enforces the direction of that dependency, and
+`rag.retrieve.retrieve()` is the single door — dispatch is on `RetrievalConfig.fusion`
+alone, so an ablation arm is a different configuration and never a different code path.
 
 [`ENGINEERING.md`](ENGINEERING.md) states the principles this repo is built under —
 what gets measured, what counts as honest naming, and what is not allowed to drift.
@@ -124,7 +166,7 @@ what gets measured, what counts as honest naming, and what is not allowed to dri
 - [x] **0** Scaffold — workspace, compose, migrations, health, CI
 - [x] **1** Ingestion — arXiv fetch, PDF parse, section-aware chunking
 - [x] **2** Dense retrieval — bge-small embeddings, HNSW
-- [ ] **3** Lexical + RRF fusion
+- [x] **3** Lexical + RRF fusion
 - [ ] **4** Cross-encoder reranking
 - [ ] **5** Generation, citations, refusal
 - [ ] **6** Golden set
