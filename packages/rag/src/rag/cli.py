@@ -16,9 +16,9 @@ from rag.index.embed import DEFAULT_BATCH_SIZE, embed_corpus, table_for
 from rag.ingest import store
 from rag.ingest.arxiv import read_manifest
 from rag.ingest.pipeline import DEFAULT_CATEGORIES, DEFAULT_PDF_CACHE, ingest
-from rag.retrieve import dense
+from rag.retrieve import lexical, retrieve
+from rag.retrieve.types import RetrievalResult
 from rag.settings import get_settings
-from rag.telemetry import StageTimer
 
 
 def _configure_logging(verbose: bool) -> None:
@@ -151,30 +151,46 @@ def _cmd_embed(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_candidates(result: RetrievalResult, *, verbose: bool) -> None:
+    for candidate in result:
+        print(
+            f"  {candidate.rank:>2}. {candidate.score:.5f}  "
+            f"chunk {candidate.chunk_id:<7} [{candidate.paper_id}]  "
+            f"p{candidate.page_start}-{candidate.page_end}  "
+            f"{candidate.section_path[:44]}"
+        )
+        if verbose:
+            body = " ".join(candidate.content.split())
+            print(f"       {candidate.paper_title[:96]}")
+            print(f"       {body[:240]}{'...' if len(body) > 240 else ''}")
+
+
 def _cmd_search(args: argparse.Namespace) -> int:
-    config = RetrievalConfig(embedding_model=args.model, hnsw_ef_search=args.ef_search)
-    timer = StageTimer()
-    with connect() as conn:
-        results = dense.search(conn, args.query, config, timer=timer, top_k=args.top_k)
+    base = RetrievalConfig(
+        embedding_model=args.model,
+        hnsw_ef_search=args.ef_search,
+        final_top_k=args.top_k,
+        rrf_k=args.rrf_k,
+    )
+    modes = ("lexical_only", "dense_only", "rrf") if args.compare else (args.mode,)
 
     print(f'query: "{args.query}"')
-    print(f"model: {config.embedding_model}   ef_search: {config.hnsw_ef_search}")
-    print(f"timings: {timer.as_dict(1)}")
-    if not results:
-        print("\nno results — has `rag embed` been run for this model and chunking?")
-        return 1
-
-    for candidate in results:
-        print()
-        print(
-            f"  {candidate.rank:>2}. score {candidate.score:.4f}  "
-            f"chunk {candidate.chunk_id}  [{candidate.paper_id}]  "
-            f"pages {candidate.page_start}-{candidate.page_end}"
-        )
-        print(f"      paper:   {candidate.paper_title[:86]}")
-        print(f"      section: {candidate.section_path[:86]}")
-        body = " ".join(candidate.content.split())
-        print(f"      text:    {body[:260]}{'...' if len(body) > 260 else ''}")
+    with connect() as conn:
+        print(f"lexemes: {' | '.join(lexical.lexemes(conn, args.query)) or '(none)'}")
+        for mode in modes:
+            config = base.model_copy(update={"fusion": mode})
+            result = retrieve(args.query, config, conn)
+            print()
+            label = f"{mode}" + (f"  (rrf_k={config.rrf_k})" if mode == "rrf" else "")
+            print(f"--- {label} " + "-" * max(0, 58 - len(label)))
+            print(
+                f"    arms: dense={result.dense_count} lexical={result.lexical_count} "
+                f"-> fused={result.fused_count}   timings: {result.timings_ms}"
+            )
+            if not result.candidates:
+                print("    no results")
+                continue
+            _print_candidates(result, verbose=args.verbose or not args.compare)
     return 0
 
 
@@ -242,9 +258,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     embed_parser.set_defaults(func=_cmd_embed)
 
-    search_parser = subparsers.add_parser("search", help="dense search over the corpus")
+    search_parser = subparsers.add_parser("search", help="retrieve over the corpus")
     search_parser.add_argument("query")
     search_parser.add_argument("--top-k", type=int, default=10)
+    search_parser.add_argument(
+        "--mode",
+        choices=("rrf", "dense_only", "lexical_only"),
+        default=RetrievalConfig().fusion,
+        help="retrieval strategy (default: rrf)",
+    )
+    search_parser.add_argument(
+        "--compare",
+        action="store_true",
+        help="run all three modes over the same query, side by side",
+    )
+    search_parser.add_argument("--rrf-k", type=int, default=RetrievalConfig().rrf_k)
     search_parser.add_argument("--model", default=default_model)
     search_parser.add_argument("--ef-search", type=int, default=RetrievalConfig().hnsw_ef_search)
     search_parser.set_defaults(func=_cmd_search)
