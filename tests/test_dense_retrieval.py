@@ -7,13 +7,13 @@ model carry the `model` marker and live in test_embedding.py.
 """
 
 import hashlib
-import math
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterator
 from datetime import date
 
 import psycopg
 import pytest
 
+from conftest import FakeEncoder
 from rag.config import RetrievalConfig
 from rag.db import connect
 from rag.index.embed import cached_vectors, embed_corpus, pending_chunks, write_vectors
@@ -27,29 +27,6 @@ pytestmark = pytest.mark.integration
 DIM = 384
 PAPER_ID = "0000.99999v1"
 MODEL = "BAAI/bge-small-en-v1.5"
-
-
-class FakeEncoder:
-    """Deterministic pseudo-embeddings derived from the text's digest.
-
-    Unit length, so cosine distance behaves as it does in production, and stable across
-    processes, so a test that passes once passes again.
-    """
-
-    dimension = DIM
-
-    def encode_documents(self, texts: Sequence[str]) -> list[list[float]]:
-        return [self._vector(text) for text in texts]
-
-    def encode_query(self, text: str) -> list[float]:
-        return self._vector(text)
-
-    @staticmethod
-    def _vector(text: str) -> list[float]:
-        digest = hashlib.sha256(text.encode()).digest()
-        raw = [(digest[i % len(digest)] - 128) / 128.0 for i in range(DIM)]
-        norm = math.sqrt(sum(x * x for x in raw)) or 1.0
-        return [x / norm for x in raw]
 
 
 def make_chunk(ordinal: int, text: str) -> Chunk:

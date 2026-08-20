@@ -1,6 +1,36 @@
+import hashlib
+import math
 from collections.abc import Sequence
 
 from rag.ingest.parse import ParsedDocument, TextSpan
+
+EMBEDDING_DIM = 384
+
+
+class FakeEncoder:
+    """Deterministic pseudo-embeddings derived from the text's digest.
+
+    Shared by every retrieval test so they assert ordering, fusion and routing rather
+    than the embedding model's opinions, and run in CI without downloading weights.
+
+    Unit length, so cosine distance behaves as it does in production, and stable across
+    processes, so a test that passes once passes again.
+    """
+
+    dimension = EMBEDDING_DIM
+
+    def encode_documents(self, texts: Sequence[str]) -> list[list[float]]:
+        return [self._vector(text) for text in texts]
+
+    def encode_query(self, text: str) -> list[float]:
+        return self._vector(text)
+
+    @staticmethod
+    def _vector(text: str) -> list[float]:
+        digest = hashlib.sha256(text.encode()).digest()
+        raw = [(digest[i % len(digest)] - 128) / 128.0 for i in range(EMBEDDING_DIM)]
+        norm = math.sqrt(sum(x * x for x in raw)) or 1.0
+        return [x / norm for x in raw]
 
 
 def build_document(
