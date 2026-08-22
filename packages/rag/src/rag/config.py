@@ -63,6 +63,26 @@ class RetrievalConfig(BaseModel, frozen=True):
     rrf_k: int = 60
     rerank_enabled: bool = True
     rerank_model: str = "BAAI/bge-reranker-base"
+    # How many fused candidates reach the cross-encoder. Not in the original field list,
+    # but the architecture requires it: fusion can emit a hundred candidates and a
+    # cross-encoder needs one CPU forward pass each. It changes what comes back, so it
+    # belongs here rather than in a constant.
+    #
+    # Measured on this corpus, 4 queries, CPU (`rag search --compare`):
+    #
+    #     top_n   p50 ms   p95 ms   top-5 kept vs n=50   mean rank movement
+    #         5      566      602              0.8 / 5                  1.1
+    #        10    1,132    1,144              1.0 / 5                  2.8
+    #        25    2,538    2,775              2.8 / 5                 10.1
+    #        50    5,316    5,591              5.0 / 5                 23.4
+    #
+    # Cost is linear at roughly 106ms per pair, and there is no cheap cut: at top_n=25
+    # only 2.8 of the 5 final results survive. Left at 50 -- the value the architecture
+    # specifies -- deliberately rather than tuned down, because the number that should
+    # decide this is Recall@5 at each setting and no golden set exists yet. Choosing it
+    # on latency alone would be tuning against the one axis that is easy to measure.
+    # Phase 7 sweeps it.
+    rerank_top_n: int = 50
     final_top_k: int = 5
     score_floor: float = 0.0  # below this -> refuse
 
