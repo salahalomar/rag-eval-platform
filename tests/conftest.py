@@ -33,6 +33,41 @@ class FakeEncoder:
         return [x / norm for x in raw]
 
 
+class WordOverlapReranker:
+    """Scores a passage by how many query words it contains, on a logit-like scale.
+
+    Stands in for the cross-encoder so tests can assert reordering, the score floor and
+    rank-movement arithmetic without a 1.1GB download and a CPU forward pass per pair.
+    It is not a model: it is a deterministic function chosen to be trivially predictable,
+    so a test can state the expected order outright.
+
+    Output is centred on zero to match the real reranker's logits, where the sign of the
+    score is what `score_floor` gates on.
+    """
+
+    def __init__(self, *, offset: float = 0.0) -> None:
+        self.offset = offset
+        self.calls: list[tuple[str, int]] = []
+
+    def score(self, query: str, passages: Sequence[str]) -> list[float]:
+        self.calls.append((query, len(passages)))
+        terms = {word.lower().strip(".,?") for word in query.split()}
+        return [
+            self.offset + sum(1.0 for word in passage.lower().split() if word.strip(".,?") in terms)
+            for passage in passages
+        ]
+
+
+class ConstantReranker:
+    """Returns the same score for every passage. For testing the floor in isolation."""
+
+    def __init__(self, value: float) -> None:
+        self.value = value
+
+    def score(self, query: str, passages: Sequence[str]) -> list[float]:
+        return [self.value] * len(passages)
+
+
 def build_document(
     paragraphs: Sequence[tuple[str, int, float, bool]],
     *,

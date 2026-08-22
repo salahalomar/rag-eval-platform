@@ -1,7 +1,8 @@
 """Lexical search and the single retrieve() entry point, against a live Postgres.
 
-Dense uses the deterministic fake encoder from test_dense_retrieval, so these tests
-assert routing, fusion and lexical matching rather than the embedding model's opinions.
+Both models are faked, so these tests assert routing, fusion and lexical matching
+rather than the models' opinions -- and run offline. Reranking is switched off here;
+it has its own module.
 """
 
 import hashlib
@@ -11,7 +12,7 @@ from datetime import date
 import psycopg
 import pytest
 
-from conftest import FakeEncoder
+from conftest import ConstantReranker, FakeEncoder, WordOverlapReranker
 from rag.config import RetrievalConfig
 from rag.db import connect
 from rag.index.embed import embed_corpus
@@ -60,6 +61,7 @@ def corpus() -> Iterator[tuple[psycopg.Connection, RetrievalConfig]]:
     config = RetrievalConfig(
         embedding_model=MODEL,
         chunk_tokens=139,
+        rerank_enabled=False,
         dense_top_k=6,
         lexical_top_k=6,
         final_top_k=6,
@@ -200,7 +202,8 @@ def test_all_three_modes_are_reachable_by_config_alone(
     conn, config = corpus
     query = "learning rate warmup transformer"
     for mode in ("dense_only", "lexical_only", "rrf"):
-        result = retrieve(query, config.model_copy(update={"fusion": mode}), conn)
+        mode_config = config.model_copy(update={"fusion": mode})
+        result = retrieve(query, mode_config, conn, encoder=FakeEncoder())
         assert result.candidates, mode
 
 
@@ -208,7 +211,8 @@ def test_dense_only_runs_no_lexical_query(
     corpus: tuple[psycopg.Connection, RetrievalConfig],
 ) -> None:
     conn, config = corpus
-    result = retrieve("warmup", config.model_copy(update={"fusion": "dense_only"}), conn)
+    mode_config = config.model_copy(update={"fusion": "dense_only"})
+    result = retrieve("warmup", mode_config, conn, encoder=FakeEncoder())
     assert result.lexical_count == 0
     assert result.dense_count > 0
     assert "lexical_ms" not in result.timings_ms
@@ -218,7 +222,8 @@ def test_lexical_only_runs_no_dense_query(
     corpus: tuple[psycopg.Connection, RetrievalConfig],
 ) -> None:
     conn, config = corpus
-    result = retrieve("warmup", config.model_copy(update={"fusion": "lexical_only"}), conn)
+    mode_config = config.model_copy(update={"fusion": "lexical_only"})
+    result = retrieve("warmup", mode_config, conn, encoder=FakeEncoder())
     assert result.dense_count == 0
     assert result.lexical_count > 0
     assert "dense_ms" not in result.timings_ms
@@ -228,7 +233,7 @@ def test_rrf_runs_both_arms_and_records_both_timings(
     corpus: tuple[psycopg.Connection, RetrievalConfig],
 ) -> None:
     conn, config = corpus
-    result = retrieve("learning rate warmup", config, conn)
+    result = retrieve("learning rate warmup", config, conn, encoder=FakeEncoder())
     assert result.dense_count > 0
     assert result.lexical_count > 0
     assert {"dense_ms", "lexical_ms", "fusion_ms"} <= set(result.timings_ms)
@@ -238,7 +243,7 @@ def test_fused_output_never_exceeds_the_union_of_the_arms(
     corpus: tuple[psycopg.Connection, RetrievalConfig],
 ) -> None:
     conn, config = corpus
-    result = retrieve("warmup training fusion", config, conn)
+    result = retrieve("warmup training fusion", config, conn, encoder=FakeEncoder())
     assert result.fused_count <= result.dense_count + result.lexical_count
 
 
@@ -246,7 +251,8 @@ def test_final_top_k_truncates_the_result(
     corpus: tuple[psycopg.Connection, RetrievalConfig],
 ) -> None:
     conn, config = corpus
-    result = retrieve("warmup", config.model_copy(update={"final_top_k": 2}), conn)
+    narrow = config.model_copy(update={"final_top_k": 2})
+    result = retrieve("warmup", narrow, conn, encoder=FakeEncoder())
     assert len(result) == 2
     assert [c.rank for c in result] == [1, 2]
 
@@ -258,9 +264,9 @@ def test_disabling_an_arm_degrades_rrf_to_the_other(
     # returns that arm's order rather than erroring.
     conn, config = corpus
     without_lexical = config.model_copy(update={"lexical_enabled": False})
-    fused = retrieve("warmup training", without_lexical, conn)
+    fused = retrieve("warmup training", without_lexical, conn, encoder=FakeEncoder())
     dense_config = config.model_copy(update={"fusion": "dense_only"})
-    dense_only = retrieve("warmup training", dense_config, conn)
+    dense_only = retrieve("warmup training", dense_config, conn, encoder=FakeEncoder())
     assert fused.lexical_count == 0
     assert fused.chunk_ids == dense_only.chunk_ids
 
@@ -270,7 +276,7 @@ def test_retrieval_result_exposes_ranked_chunk_ids(
 ) -> None:
     # The form the Phase 7 metrics consume.
     conn, config = corpus
-    result = retrieve("warmup", config, conn)
+    result = retrieve("warmup", config, conn, encoder=FakeEncoder())
     assert result.chunk_ids == [c.chunk_id for c in result.candidates]
     assert len(result) == len(result.chunk_ids)
 
@@ -279,8 +285,8 @@ def test_repeated_retrieval_is_identical(
     corpus: tuple[psycopg.Connection, RetrievalConfig],
 ) -> None:
     conn, config = corpus
-    first = retrieve("learning rate warmup", config, conn)
-    second = retrieve("learning rate warmup", config, conn)
+    first = retrieve("learning rate warmup", config, conn, encoder=FakeEncoder())
+    second = retrieve("learning rate warmup", config, conn, encoder=FakeEncoder())
     assert first.chunk_ids == second.chunk_ids
     assert [c.score for c in first] == [c.score for c in second]
 
@@ -291,7 +297,111 @@ def test_a_stopword_only_query_still_returns_dense_results(
     # The reason the lexical arm returns [] instead of raising: the query still has a
     # dense answer, and one arm failing must not take the request down.
     conn, config = corpus
-    result = retrieve("what about it", config, conn)
+    result = retrieve("what about it", config, conn, encoder=FakeEncoder())
     assert result.lexical_count == 0
     assert result.dense_count > 0
     assert result.candidates
+
+
+# --- reranking through the entry point --------------------------------------
+
+
+def test_reranking_reorders_what_retrieve_returns(
+    corpus: tuple[psycopg.Connection, RetrievalConfig],
+) -> None:
+    conn, config = corpus
+    query = "cross encoder reranker passage"
+    without = retrieve(query, config, conn, encoder=FakeEncoder())
+    with_rerank = retrieve(
+        query,
+        config.model_copy(update={"rerank_enabled": True, "score_floor": -99.0}),
+        conn,
+        encoder=FakeEncoder(),
+        reranker=WordOverlapReranker(),
+    )
+    assert with_rerank.rerank_stats is not None
+    assert without.rerank_stats is None
+    # The chunk that actually contains the query's words wins once a model looks at the
+    # pair, which the fused order had no way to know.
+    assert "cross encoder" in with_rerank.candidates[0].content.lower()
+
+
+def test_rerank_stats_ride_along_on_the_result(
+    corpus: tuple[psycopg.Connection, RetrievalConfig],
+) -> None:
+    conn, config = corpus
+    result = retrieve(
+        "reranker fusion",
+        config.model_copy(update={"rerank_enabled": True, "score_floor": -99.0}),
+        conn,
+        encoder=FakeEncoder(),
+        reranker=WordOverlapReranker(),
+    )
+    stats = result.rerank_stats
+    assert stats is not None
+    assert stats.scored > 0
+    assert stats.mean_rank_movement >= 0.0
+
+
+def test_a_top_score_below_the_floor_refuses_with_a_reason(
+    corpus: tuple[psycopg.Connection, RetrievalConfig],
+) -> None:
+    # Refusal is a measured behaviour, not an error path. Phase 5 declines to call the
+    # LLM on exactly this reason.
+    conn, config = corpus
+    result = retrieve(
+        "warmup",
+        config.model_copy(update={"rerank_enabled": True, "score_floor": 0.0}),
+        conn,
+        encoder=FakeEncoder(),
+        reranker=ConstantReranker(-3.0),
+    )
+    assert result.candidates == ()
+    assert result.reason == "below_score_floor"
+    assert result.refused
+
+
+def test_a_top_score_above_the_floor_is_returned(
+    corpus: tuple[psycopg.Connection, RetrievalConfig],
+) -> None:
+    conn, config = corpus
+    result = retrieve(
+        "warmup",
+        config.model_copy(update={"rerank_enabled": True, "score_floor": 0.0}),
+        conn,
+        encoder=FakeEncoder(),
+        reranker=ConstantReranker(3.0),
+    )
+    assert result.candidates
+    assert result.reason is None
+    assert not result.refused
+
+
+def test_an_arm_without_reranking_never_refuses_on_score(
+    corpus: tuple[psycopg.Connection, RetrievalConfig],
+) -> None:
+    # Stated as a test because it is a real limitation rather than an oversight: cosine
+    # and ts_rank_cd are on scales no single floor value can serve, so the floor gates
+    # only the reranker's judgement.
+    conn, config = corpus
+    result = retrieve(
+        "warmup",
+        config.model_copy(update={"rerank_enabled": False, "score_floor": 999.0}),
+        conn,
+        encoder=FakeEncoder(),
+    )
+    assert result.candidates
+    assert result.reason is None
+
+
+def test_an_empty_result_from_no_matches_is_not_a_refusal(
+    corpus: tuple[psycopg.Connection, RetrievalConfig],
+) -> None:
+    # "The corpus has nothing relevant" and "the query matched nothing" are different
+    # failures, and only one of them is the system working correctly.
+    conn, config = corpus
+    other = config.model_copy(update={"chunk_tokens": 996, "rerank_enabled": True})
+    result = retrieve("warmup", other, conn, encoder=FakeEncoder(), reranker=WordOverlapReranker())
+    assert result.candidates == ()
+    assert result.reason is None
+    assert not result.refused
