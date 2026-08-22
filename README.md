@@ -5,9 +5,10 @@ harness is the deliverable** and the chat interface is only what makes it demoab
 repository measures its own retrieval and answer quality on every commit and publishes
 an ablation table — including the arms that lost.
 
-**Status: Phase 3 — hybrid retrieval.** Dense (bge-small over HNSW) and lexical
+**Status: Phase 4 — reranked hybrid retrieval.** Dense (bge-small over HNSW) and lexical
 (`ts_rank_cd`) arms behind one `retrieve()` entry point, fused with Reciprocal Rank
-Fusion. Cross-encoder reranking is next.
+Fusion and reordered by a `bge-reranker-base` cross-encoder, with refusal below a score
+floor. Generation is next.
 
 ---
 
@@ -144,6 +145,64 @@ this a *measured* reason to want the BM25 arm in Phase 6 rather than a theoretic
 RRF's p50 is close to the sum of the two arms because they run sequentially. Running them
 concurrently is a Phase 9 concern, not a correctness one.
 
+## Cross-encoder reranking
+
+A bi-encoder embeds query and passage independently — neither vector is computed knowing
+the other exists. A cross-encoder concatenates them and attends across the pair, which is
+why it reorders results a bi-encoder got wrong, and why it cannot be indexed: every pair
+needs its own forward pass. That is the entire trade, and this is what it costs here.
+
+| `rerank_top_n` | p50 ms | p95 ms | top-5 kept vs n=50 | mean rank movement |
+|---:|---:|---:|---:|---:|
+| 5 | 566 | 602 | 0.8 / 5 | 1.1 |
+| 10 | 1,132 | 1,144 | 1.0 / 5 | 2.8 |
+| 25 | 2,538 | 2,775 | 2.8 / 5 | 10.1 |
+| **50** | **5,316** | **5,591** | 5.0 / 5 | 23.4 |
+
+**Reranking is by far the most expensive stage in the system** — roughly 106ms per pair
+on CPU, against 32ms for the *entire* hybrid retrieval that feeds it. And there is no
+cheap cut: at `top_n=25` only 2.8 of the 5 final results survive.
+
+It stays at 50 anyway. The number that should decide this is Recall@5 at each setting,
+and no golden set exists yet; trimming it now would be tuning against the one axis that
+happens to be easy to measure. Phase 7 sweeps it and the table will show what the latency
+bought.
+
+Apple's MPS backend runs the same model at 56ms/pair — 1.7× faster — and is deliberately
+not used. The deployment target is Linux CPU, so a latency figure measured on an Apple GPU
+would describe hardware this system never runs on, and mixing MPS locally with CPU in CI
+puts cross-machine determinism at risk for no benefit to the published numbers.
+
+### The reranker sees about 80% of each chunk
+
+| | tokenizer | vocab | p50 tokens per chunk |
+|---|---|---|---:|
+| embedder | BERT WordPiece | 30,522 | 460 |
+| reranker | XLM-RoBERTa | 250,002 | 511 |
+
+`bge-reranker-base` is multilingual and tokenises English into **1.19× more tokens** than
+`bge-small` does. Chunks sized to fill the embedder's 512-token window therefore overflow
+the reranker's, and **48% of corpus chunks — 78% of the pairs in the query above — lose
+their tail**.
+
+This is the same class of failure the chunker was built to prevent, on a stage that did
+not exist when the budget was set. It is reported per query (`truncated_pairs`) rather
+than hidden. It is not fixed by guesswork: shrinking `chunk_tokens` to about 430 would fit
+both windows, and whether that trade is worth making is a Recall@5 question for Phase 7,
+where it becomes an ablation arm rather than a hunch.
+
+### Refusal
+
+Below `score_floor` the result comes back empty with `reason="below_score_floor"`, and
+Phase 5 declines to call the LLM at all. Refusal is a measured behaviour, not an error
+path — the golden set scores how often it was the right call.
+
+Scores are raw logits (roughly [-11, +11], zero being neutral), not probabilities. A
+sigmoid would put every score above zero and silently turn the default floor of 0.0 into
+"never refuse". The consequence, stated rather than discovered: **an arm with reranking
+disabled cannot refuse on score**, because cosine similarity and `ts_rank_cd` are on
+scales no single floor value can serve.
+
 ## Layout
 
 | Path | What lives here |
@@ -167,7 +226,7 @@ what gets measured, what counts as honest naming, and what is not allowed to dri
 - [x] **1** Ingestion — arXiv fetch, PDF parse, section-aware chunking
 - [x] **2** Dense retrieval — bge-small embeddings, HNSW
 - [x] **3** Lexical + RRF fusion
-- [ ] **4** Cross-encoder reranking
+- [x] **4** Cross-encoder reranking
 - [ ] **5** Generation, citations, refusal
 - [ ] **6** Golden set
 - [ ] **7** Eval harness and ablation table
