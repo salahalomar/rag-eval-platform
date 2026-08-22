@@ -40,6 +40,26 @@ class Candidate:
 
 
 @dataclass(frozen=True, slots=True)
+class RerankStats:
+    """What reranking did, so its effect is reported rather than assumed.
+
+    Lives here beside `RetrievalResult` rather than in `rerank`, because the result
+    carries it and the reranker imports the candidate types -- putting it the other way
+    round makes the two modules import each other.
+    """
+
+    scored: int
+    truncated_pairs: int
+    mean_rank_movement: float
+    max_rank_movement: int
+
+    @property
+    def truncation_rate(self) -> float:
+        """Share of pairs longer than the model's window, whose tail was dropped."""
+        return self.truncated_pairs / self.scored if self.scored else 0.0
+
+
+@dataclass(frozen=True, slots=True)
 class RetrievalResult:
     """What one call to `retrieve()` produced, and what it cost.
 
@@ -58,6 +78,21 @@ class RetrievalResult:
     lexical_count: int = 0
     fused_count: int = 0
     timings_ms: dict[str, float] = field(default_factory=dict)
+
+    # Why the candidate list is empty, when it is. Phase 5 refuses without calling the
+    # LLM on `below_score_floor`, and that distinction has to survive out of retrieval:
+    # "the corpus has nothing relevant" and "the query matched nothing at all" are
+    # different failures, and only one of them is the system working correctly.
+    reason: str | None = None
+
+    # Present only when a reranker actually ran. None means it never did, which is a
+    # different statement from "it ran and moved nothing".
+    rerank_stats: RerankStats | None = None
+
+    @property
+    def refused(self) -> bool:
+        """Whether retrieval declined to return anything it had, rather than finding none."""
+        return self.reason == "below_score_floor"
 
     def __len__(self) -> int:
         """Number of candidates returned, so callers can treat this as a sequence."""
