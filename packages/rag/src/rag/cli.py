@@ -151,18 +151,33 @@ def _cmd_embed(args: argparse.Namespace) -> int:
     return 0
 
 
-def _print_candidates(result: RetrievalResult, *, verbose: bool) -> None:
+def _print_candidates(
+    result: RetrievalResult, *, verbose: bool, prior_rank: dict[int, int] | None = None
+) -> None:
     for candidate in result:
+        moved = ""
+        if prior_rank is not None:
+            before = prior_rank.get(candidate.chunk_id)
+            moved = f"  (was #{before})" if before is not None else "  (new)"
+        score = (
+            f"rerank {candidate.rerank_score:+.3f}"
+            if candidate.rerank_score is not None
+            else f"{candidate.score:.5f}"
+        )
         print(
-            f"  {candidate.rank:>2}. {candidate.score:.5f}  "
+            f"  {candidate.rank:>2}. {score:<15} "
             f"chunk {candidate.chunk_id:<7} [{candidate.paper_id}]  "
             f"p{candidate.page_start}-{candidate.page_end}  "
-            f"{candidate.section_path[:44]}"
+            f"{candidate.section_path[:36]}{moved}"
         )
         if verbose:
             body = " ".join(candidate.content.split())
             print(f"       {candidate.paper_title[:96]}")
             print(f"       {body[:240]}{'...' if len(body) > 240 else ''}")
+
+
+def _arm(fusion: str, *, rerank: bool) -> dict[str, object]:
+    return {"fusion": fusion, "rerank_enabled": rerank}
 
 
 def _cmd_search(args: argparse.Namespace) -> int:
@@ -171,26 +186,60 @@ def _cmd_search(args: argparse.Namespace) -> int:
         hnsw_ef_search=args.ef_search,
         final_top_k=args.top_k,
         rrf_k=args.rrf_k,
+        rerank_enabled=args.rerank,
+        rerank_top_n=args.rerank_top_n,
+        # The floor is opened right up for inspection. `rag search` exists to show what
+        # retrieval produced, and a refusal that hides the ranking is unhelpful here;
+        # Phase 5's answer path is where the configured floor actually gates.
+        score_floor=-1e9,
     )
-    modes = ("lexical_only", "dense_only", "rrf") if args.compare else (args.mode,)
+    # --compare adds reranking as a fourth block so the reordering is visible against the
+    # fusion order it started from, which is the only way to see what the stage did.
+    plans: list[tuple[str, RetrievalConfig]] = (
+        [
+            ("lexical_only", base.model_copy(update=_arm("lexical_only", rerank=False))),
+            ("dense_only", base.model_copy(update=_arm("dense_only", rerank=False))),
+            ("rrf", base.model_copy(update=_arm("rrf", rerank=False))),
+            ("rrf + rerank", base.model_copy(update=_arm("rrf", rerank=True))),
+        ]
+        if args.compare
+        else [(args.mode, base.model_copy(update={"fusion": args.mode}))]
+    )
 
     print(f'query: "{args.query}"')
+    fusion_order: dict[int, int] = {}
     with connect() as conn:
         print(f"lexemes: {' | '.join(lexical.lexemes(conn, args.query)) or '(none)'}")
-        for mode in modes:
-            config = base.model_copy(update={"fusion": mode})
+        for label, config in plans:
             result = retrieve(args.query, config, conn)
+            if label == "rrf":
+                fusion_order = {c.chunk_id: c.rank for c in result}
+
             print()
-            label = f"{mode}" + (f"  (rrf_k={config.rrf_k})" if mode == "rrf" else "")
             print(f"--- {label} " + "-" * max(0, 58 - len(label)))
             print(
                 f"    arms: dense={result.dense_count} lexical={result.lexical_count} "
                 f"-> fused={result.fused_count}   timings: {result.timings_ms}"
             )
+            if result.rerank_stats is not None:
+                stats = result.rerank_stats
+                print(
+                    f"    reranked {stats.scored}: mean rank movement "
+                    f"{stats.mean_rank_movement:.1f}, max {stats.max_rank_movement}, "
+                    f"{stats.truncated_pairs} of {stats.scored} pairs truncated "
+                    f"({stats.truncation_rate:.0%})"
+                )
+            if result.refused:
+                print(f"    refused: {result.reason}")
+                continue
             if not result.candidates:
                 print("    no results")
                 continue
-            _print_candidates(result, verbose=args.verbose or not args.compare)
+            _print_candidates(
+                result,
+                verbose=args.verbose or not args.compare,
+                prior_rank=fusion_order if label == "rrf + rerank" else None,
+            )
     return 0
 
 
@@ -273,6 +322,13 @@ def main(argv: list[str] | None = None) -> int:
         help="run all three modes over the same query, side by side",
     )
     search_parser.add_argument("--rrf-k", type=int, default=RetrievalConfig().rrf_k)
+    search_parser.add_argument(
+        "--rerank",
+        action=argparse.BooleanOptionalAction,
+        default=RetrievalConfig().rerank_enabled,
+        help="cross-encoder rerank the fused candidates (default: on)",
+    )
+    search_parser.add_argument("--rerank-top-n", type=int, default=RetrievalConfig().rerank_top_n)
     search_parser.add_argument("--model", default=default_model)
     search_parser.add_argument("--ef-search", type=int, default=RetrievalConfig().hnsw_ef_search)
     search_parser.set_defaults(func=_cmd_search)
